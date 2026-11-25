@@ -44,6 +44,109 @@ model User {
   dietaryPreference DietaryPreference  @default(NONE)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+  customExercises   Exercise[]         @relation("CustomExercises")
+  workoutTemplates  WorkoutTemplate[]
+  workoutSessions   WorkoutSession[]
 
   @@index([createdAt])
+}
+
+model Exercise {
+  id            String   @id @default(cuid())
+  name          String
+  muscleGroup   String
+  equipment     String
+  description   String
+  difficulty    String
+  instructions  String[]
+  imageUrl      String?
+  ownerId       String?
+  owner         User?    @relation("CustomExercises", fields: [ownerId], references: [id], onDelete: Cascade)
+  templateUses  WorkoutTemplateExercise[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([muscleGroup, equipment])
+  @@index([ownerId])
+}
+
+model WorkoutTemplate {
+  id        String                    @id @default(cuid())
+  name      String
+  notes     String?
+  ownerId   String
+  owner     User                      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  exercises WorkoutTemplateExercise[]
+  sessions  WorkoutSession[]
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+
+  @@index([ownerId, updatedAt])
+}
+
+model WorkoutTemplateExercise {
+  id              String          @id @default(cuid())
+  templateId      String
+  template        WorkoutTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  exerciseId      String
+  exercise        Exercise        @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  order           Int
+  sets            Int
+  targetReps      Int
+  targetWeightKg  Float?
+  restSeconds     Int             @default(60)
+  notes           String?
+
+  @@unique([templateId, order])
+  @@index([exerciseId])
+}
+
+model WorkoutSession {
+  id              String                  @id @default(cuid())
+  name            String
+  ownerId         String
+  owner           User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  templateId      String?
+  template        WorkoutTemplate?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  startedAt       DateTime                @default(now())
+  finishedAt      DateTime?
+  durationSeconds Int?
+  exercises       WorkoutExercise[]
+
+  @@index([ownerId, startedAt])
+}
+
+model WorkoutExercise {
+  id              String         @id @default(cuid())
+  sessionId       String
+  session         WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name            String
+  muscleGroup     String
+  equipment       String
+  description     String
+  difficulty      String
+  instructions    String[]
+  imageUrl        String?
+  order           Int
+  targetSets      Int
+  targetReps      Int
+  targetWeightKg  Float?
+  restSeconds     Int
+  notes           String?
+  sets            WorkoutSet[]
+
+  @@unique([sessionId, order])
+}
+
+model WorkoutSet {
+  id                String          @id @default(cuid())
+  workoutExerciseId String
+  workoutExercise   WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
+  setNumber         Int
+  reps              Int
+  weightKg          Float
+  completed         Boolean         @default(true)
+  completedAt       DateTime        @default(now())
+
+  @@unique([workoutExerciseId, setNumber])
 }

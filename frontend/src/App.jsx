@@ -7,6 +7,10 @@ import RegisterPage from './pages/RegisterPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import FeaturePage from './pages/FeaturePage.jsx';
+import ExerciseLibraryPage from './pages/ExerciseLibraryPage.jsx';
+import WorkoutBuilderPage from './pages/WorkoutBuilderPage.jsx';
+import LiveWorkoutPage from './pages/LiveWorkoutPage.jsx';
+import WorkoutHistoryPage from './pages/WorkoutHistoryPage.jsx';
 
 function LoadingScreen() {
   return <main className="screen-loader" aria-label="Loading your account"><span className="loader-mark" /></main>;
@@ -29,8 +33,11 @@ export default function App() {
       <Route path="/app" element={<ProtectedLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="profile" element={<ProfilePage />} />
-        <Route path="workouts" element={<FeaturePage title="Workout builder" phase="2" />} />
-        <Route path="exercises" element={<FeaturePage title="Exercise library" phase="2" />} />
+        <Route path="workouts" element={<WorkoutBuilderPage />} />
+        <Route path="workouts/live/:id" element={<LiveWorkoutPage />} />
+        <Route path="workouts/history" element={<WorkoutHistoryPage />} />
+        <Route path="workouts/history/:id" element={<WorkoutHistoryPage />} />
+        <Route path="exercises" element={<ExerciseLibraryPage />} />
         <Route path="diet" element={<FeaturePage title="Nutrition" phase="4" />} />
         <Route path="progress" element={<FeaturePage title="Progress" phase="3" />} />
       </Route>

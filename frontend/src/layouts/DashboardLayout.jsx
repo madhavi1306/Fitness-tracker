@@ -6,6 +6,7 @@ const pageTitles = {
   '/app': 'Dashboard',
   '/app/profile': 'Your profile',
   '/app/workouts': 'Workout builder',
+  '/app/workouts/history': 'Workout history',
   '/app/exercises': 'Exercise library',
   '/app/diet': 'Diet plan',
   '/app/progress': 'Overall progress',
@@ -17,7 +18,7 @@ export default function DashboardLayout() {
     <div className="app-shell">
       <Sidebar />
       <div className="main-column">
-        <Topbar title={pageTitles[pathname] || 'Training space'} />
+        <Topbar title={pageTitles[pathname] || (pathname.startsWith('/app/workouts/live/') ? 'Live workout' : pathname.startsWith('/app/workouts/history/') ? 'Workout summary' : 'Training space')} />
         <main className="page-content"><Outlet /></main>
       </div>
     </div>

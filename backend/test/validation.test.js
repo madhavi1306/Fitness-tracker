@@ -2,6 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import bcrypt from 'bcrypt';
 import { loginSchema, profileUpdateSchema, publicUser, registerSchema } from '../src/utils/validation.js';
+import {
+  exerciseSchema,
+  finishWorkoutSchema,
+  templateSchema,
+  workoutSetSchema,
+} from '../src/utils/workoutValidation.js';
 
 const validRegistration = {
   fullName: 'Jordan Lee',
@@ -43,5 +49,41 @@ test('bcrypt hashes can be verified and public users omit password hashes', asyn
   assert.deepEqual(publicUser({ id: 'user-id', email: 'jordan@example.com', passwordHash }), {
     id: 'user-id',
     email: 'jordan@example.com',
+  });
+
+  test('exercise validation restricts the library categories and requires instructions', () => {
+    const exercise = {
+      name: 'Goblet squat',
+      muscleGroup: 'Legs',
+      equipment: 'Dumbbells',
+      description: 'A squat variation.',
+      difficulty: 'Beginner',
+      instructions: ['Hold one dumbbell at your chest.', 'Squat with control.'],
+    };
+    assert.equal(exerciseSchema.safeParse(exercise).success, true);
+    assert.equal(exerciseSchema.safeParse({ ...exercise, muscleGroup: 'Other' }).success, false);
+    assert.equal(exerciseSchema.safeParse({ ...exercise, instructions: [] }).success, false);
+  });
+
+  test('template validation rejects invalid targets and duplicate exercises', () => {
+    const template = {
+      name: 'Leg day',
+      exercises: [
+        { exerciseId: 'squat', sets: 3, targetReps: 8, targetWeightKg: 20, restSeconds: 90 },
+        { exerciseId: 'curl', sets: 3, targetReps: 12, targetWeightKg: null, restSeconds: 60 },
+      ],
+    };
+    assert.equal(templateSchema.safeParse(template).success, true);
+    assert.equal(templateSchema.safeParse({ ...template, exercises: [template.exercises[0], template.exercises[0]] }).success, false);
+    assert.equal(templateSchema.safeParse({ ...template, exercises: [{ ...template.exercises[0], sets: 0 }] }).success, false);
+    assert.equal(templateSchema.safeParse({ ...template, exercises: [{ ...template.exercises[0], targetWeightKg: -1 }] }).success, false);
+  });
+
+  test('workout set and finish validation enforce positive reps and nonnegative weights', () => {
+    const set = { exerciseId: 'session-exercise', setNumber: 1, reps: 8, weightKg: 0 };
+    assert.equal(workoutSetSchema.safeParse(set).success, true);
+    assert.equal(workoutSetSchema.safeParse({ ...set, reps: 0 }).success, false);
+    assert.equal(workoutSetSchema.safeParse({ ...set, weightKg: -1 }).success, false);
+    assert.equal(finishWorkoutSchema.safeParse({ durationSeconds: -1 }).success, false);
   });
 });

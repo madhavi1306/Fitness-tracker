@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Activity, Apple, BarChart3, Dumbbell, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
+import { Activity, Apple, BarChart3, Dumbbell, History, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
 import Brand from '../components/Brand.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 
 const links = [
   { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/app/workouts', label: 'Workout', icon: Dumbbell },
+  { to: '/app/workouts', label: 'Workout', icon: Dumbbell, end: true },
+  { to: '/app/workouts/history', label: 'Workout history', icon: History },
   { to: '/app/exercises', label: 'Exercise library', icon: Activity },
   { to: '/app/diet', label: 'Diet plan', icon: Apple },
   { to: '/app/progress', label: 'Overall progress', icon: BarChart3 },

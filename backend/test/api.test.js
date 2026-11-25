@@ -42,4 +42,26 @@ test('API health and protected routes respond with expected status codes', async
 
   const me = await fetch(`${baseUrl}/api/auth/me`);
   assert.equal(me.status, 401);
+
+  const protectedPhaseTwoRoutes = [
+    ['/api/exercises', 'GET'],
+    ['/api/exercises', 'POST'],
+    ['/api/exercises/example', 'GET'],
+    ['/api/templates', 'GET'],
+    ['/api/templates', 'POST'],
+    ['/api/templates/example', 'PUT'],
+    ['/api/workouts/start', 'POST'],
+    ['/api/workouts/history', 'GET'],
+    ['/api/workouts/example', 'GET'],
+    ['/api/workouts/example/sets', 'POST'],
+    ['/api/workouts/example/finish', 'POST'],
+  ];
+  for (const [path, method] of protectedPhaseTwoRoutes) {
+    const response = await fetch(`${baseUrl}${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: method === 'GET' ? undefined : JSON.stringify({}),
+    });
+    assert.equal(response.status, 401, `${method} ${path} must require authentication`);
+  }
 });
