@@ -1,0 +1,1 @@
+Service-layer modules can be added here when domain workflows are introduced. Phase 1 keeps authentication and profile operations in their focused controllers and Prisma calls.
