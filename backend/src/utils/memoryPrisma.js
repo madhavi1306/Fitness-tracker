@@ -35,6 +35,8 @@ export const memoryState = {
   })),
   templates: [],
   sessions: [],
+  personalRecords: [],
+  weightEntries: [],
 };
 
 function matchesWhere(item, where = {}) {
@@ -251,7 +253,7 @@ export const memoryPrisma = {
     findFirst: async ({ where }) => {
       const session = memoryState.sessions.find((item) => item.id === where.sessionId);
       const exercise = session?.exercises.find((item) => item.id === where.id);
-      return exercise ? { id: exercise.id, targetSets: exercise.targetSets } : null;
+      return exercise ? { id: exercise.id, name: exercise.name, targetSets: exercise.targetSets } : null;
     },
   },
   workoutSet: {
@@ -272,6 +274,41 @@ export const memoryPrisma = {
         if (exercise) return exercise.sets.length;
       }
       return 0;
+    },
+  },
+  personalRecord: {
+    findMany: async ({ where, orderBy, take }) => {
+      const entries = memoryState.personalRecords.filter((item) =>
+        item.ownerId === where.ownerId
+        && (!where.exerciseName || item.exerciseName === where.exerciseName)
+        && (!where.recordType || item.recordType === where.recordType));
+      const sorted = [...entries].sort((a, b) => new Date(b.achievedAt) - new Date(a.achievedAt));
+      if (take) sorted.length = Math.min(take, sorted.length);
+      return sorted;
+    },
+    create: async ({ data }) => {
+      const record = { id: id('pr'), ...data, achievedAt: data.achievedAt || now() };
+      memoryState.personalRecords.push(record);
+      return record;
+    },
+  },
+  weightEntry: {
+    findMany: async ({ where, orderBy }) => {
+      const entries = memoryState.weightEntries.filter((entry) => entry.ownerId === where.ownerId);
+      return [...entries].sort((a, b) => new Date(a.date) - new Date(b.date));
+    },
+    upsert: async ({ where, create, update }) => {
+      const entryDate = where.ownerId_date.date;
+      const existing = memoryState.weightEntries.find((item) =>
+        item.ownerId === where.ownerId_date.ownerId
+        && new Date(item.date).toDateString() === new Date(entryDate).toDateString());
+      if (existing) {
+        Object.assign(existing, update, { updatedAt: now() });
+        return existing;
+      }
+      const entry = { id: id('weight'), ...create, createdAt: now(), updatedAt: now() };
+      memoryState.weightEntries.push(entry);
+      return entry;
     },
   },
   $transaction: async (callback) => callback({

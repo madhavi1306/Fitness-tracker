@@ -7,6 +7,7 @@ import {
   templateUpdateSchema,
   workoutSetSchema,
 } from '../utils/workoutValidation.js';
+import { detectNewRecords, setVolume } from '../services/progress.service.js';
 
 const exerciseInclude = {
   exercise: {
@@ -198,13 +199,13 @@ export async function logSet(req, res, next) {
   try {
     const session = await prisma.workoutSession.findFirst({
       where: { id: req.params.id, ownerId: req.user.id },
-      select: { id: true, finishedAt: true },
+      include: { exercises: { include: { sets: true } } },
     });
     if (!session) return res.status(404).json({ error: 'Workout not found' });
     if (session.finishedAt) return res.status(409).json({ error: 'This workout is already finished' });
     const exercise = await prisma.workoutExercise.findFirst({
       where: { id: parsed.data.exerciseId, sessionId: session.id },
-      select: { id: true, targetSets: true },
+      select: { id: true, name: true, targetSets: true },
     });
     if (!exercise) return res.status(400).json({ error: 'Exercise does not belong to this workout' });
     if (parsed.data.setNumber > exercise.targetSets) {
@@ -214,6 +215,10 @@ export async function logSet(req, res, next) {
     if (parsed.data.setNumber !== loggedSets + 1) {
       return res.status(400).json({ error: 'Sets must be logged in order without gaps' });
     }
+    const previousWorkouts = await prisma.workoutSession.findMany({
+      where: { ownerId: req.user.id, finishedAt: { not: null } },
+      include: { exercises: { include: { sets: true } } },
+    });
     const set = await prisma.workoutSet.create({
       data: {
         workoutExerciseId: exercise.id,
@@ -222,7 +227,36 @@ export async function logSet(req, res, next) {
         weightKg: parsed.data.weightKg,
       },
     });
-    return res.status(201).json({ set });
+    const previousSets = previousWorkouts
+      .flatMap((workout) => workout.exercises)
+      .filter((item) => item.name === exercise.name)
+      .flatMap((item) => item.sets)
+      .filter((item) => item.completed);
+    const currentExercise = session.exercises.find((item) => item.id === exercise.id);
+    const priorExerciseVolumes = previousWorkouts.flatMap((workout) => workout.exercises
+      .filter((item) => item.name === exercise.name)
+      .map((item) => item.sets.filter((entry) => entry.completed)
+        .reduce((sum, entry) => sum + setVolume(entry.weightKg, entry.reps), 0)));
+    const candidates = detectNewRecords({
+      set,
+      previousSets,
+      currentSets: [...currentExercise.sets, set],
+      previousExerciseVolumes: priorExerciseVolumes,
+    });
+    const prs = [];
+    for (const candidate of candidates) {
+      if (candidate.value <= (candidate.previousValue ?? 0)) continue;
+      const record = await prisma.personalRecord.create({
+        data: {
+          ownerId: req.user.id,
+          workoutSessionId: session.id,
+          exerciseName: exercise.name,
+          ...candidate,
+        },
+      });
+      prs.push(record);
+    }
+    return res.status(201).json({ set, prs });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(409).json({ error: 'That set has already been logged' });

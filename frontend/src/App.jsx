@@ -11,6 +11,7 @@ import ExerciseLibraryPage from './pages/ExerciseLibraryPage.jsx';
 import WorkoutBuilderPage from './pages/WorkoutBuilderPage.jsx';
 import LiveWorkoutPage from './pages/LiveWorkoutPage.jsx';
 import WorkoutHistoryPage from './pages/WorkoutHistoryPage.jsx';
+import ProgressPage from './pages/ProgressPage.jsx';
 
 function LoadingScreen() {
   return <main className="screen-loader" aria-label="Loading your account"><span className="loader-mark" /></main>;
@@ -39,7 +40,7 @@ export default function App() {
         <Route path="workouts/history/:id" element={<WorkoutHistoryPage />} />
         <Route path="exercises" element={<ExerciseLibraryPage />} />
         <Route path="diet" element={<FeaturePage title="Nutrition" phase="4" />} />
-        <Route path="progress" element={<FeaturePage title="Progress" phase="3" />} />
+        <Route path="progress" element={<ProgressPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

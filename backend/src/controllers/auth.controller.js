@@ -27,6 +27,7 @@ export async function register(req, res, next) {
         age: parsed.data.age,
         heightCm: parsed.data.heightCm,
         currentWeightKg: parsed.data.currentWeightKg,
+        startingWeightKg: parsed.data.currentWeightKg,
         targetWeightKg: parsed.data.targetWeightKg ?? null,
         fitnessGoal: parsed.data.fitnessGoal,
       },

@@ -38,6 +38,7 @@ model User {
   age               Int
   heightCm          Float
   currentWeightKg   Float
+  startingWeightKg  Float              @default(75)
   targetWeightKg    Float?
   fitnessGoal       FitnessGoal
   activityLevel     ActivityLevel      @default(MODERATELY_ACTIVE)
@@ -47,6 +48,8 @@ model User {
   customExercises   Exercise[]         @relation("CustomExercises")
   workoutTemplates  WorkoutTemplate[]
   workoutSessions   WorkoutSession[]
+  personalRecords   PersonalRecord[]
+  weightEntries     WeightEntry[]
 
   @@index([createdAt])
 }
@@ -112,6 +115,7 @@ model WorkoutSession {
   finishedAt      DateTime?
   durationSeconds Int?
   exercises       WorkoutExercise[]
+  personalRecords PersonalRecord[]
 
   @@index([ownerId, startedAt])
 }
@@ -149,4 +153,35 @@ model WorkoutSet {
   completedAt       DateTime        @default(now())
 
   @@unique([workoutExerciseId, setNumber])
+}
+
+model PersonalRecord {
+  id                 String   @id @default(cuid())
+  ownerId            String
+  owner              User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  workoutSessionId   String
+  workoutSession     WorkoutSession @relation(fields: [workoutSessionId], references: [id], onDelete: Cascade)
+  exerciseName       String
+  recordType         String
+  value              Float
+  previousValue      Float?
+  weightKg           Float?
+  reps               Int?
+  achievedAt         DateTime @default(now())
+
+  @@index([ownerId, achievedAt])
+  @@index([ownerId, exerciseName, recordType])
+}
+
+model WeightEntry {
+  id        String   @id @default(cuid())
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  weightKg  Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, date])
+  @@index([ownerId, date])
 }

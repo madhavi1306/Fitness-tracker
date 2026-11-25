@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Check, ChevronLeft, ChevronRight, Clock3, Dumbbell, Pause, Play, RotateCcw, SkipForward } from 'lucide-react';
+import { ArrowLeft, Award, Check, ChevronLeft, ChevronRight, Clock3, Dumbbell, Pause, Play, RotateCcw, SkipForward } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import ExerciseArt from '../components/ExerciseArt.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
@@ -34,6 +34,7 @@ export default function LiveWorkoutPage() {
   const [busy, setBusy] = useState(false);
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState('');
+  const [newRecords, setNewRecords] = useState([]);
   const elapsedRef = useRef(0);
   const timerStartRef = useRef(0);
   const exercise = workout?.exercises?.[currentIndex];
@@ -114,7 +115,7 @@ export default function LiveWorkoutPage() {
     setBusy(true);
     setError('');
     try {
-      const { set } = await apiRequest(`/workouts/${workout.id}/sets`, {
+      const { set, prs } = await apiRequest(`/workouts/${workout.id}/sets`, {
         method: 'POST',
         token,
         body: JSON.stringify({
@@ -128,6 +129,7 @@ export default function LiveWorkoutPage() {
         ...current,
         exercises: current.exercises.map((item) => item.id === exercise.id ? { ...item, sets: [...item.sets, set] } : item),
       }));
+      if (prs?.length) setNewRecords((current) => [...prs, ...current]);
       setRestLeft(Math.max(0, chosenRest));
     } catch (requestError) {
       setError(requestError.message);
@@ -179,6 +181,9 @@ export default function LiveWorkoutPage() {
         <div className="live-timer"><Clock3 size={18} /><span>{formatTime(elapsed)}</span><small>DURATION</small></div>
       </section>
       {error && <p className="form-error" role="alert">{error}</p>}
+      {newRecords.length > 0 && <section className="new-pr-notice" role="status">
+        <Award size={20} /><div><strong>NEW PR!</strong>{newRecords.slice(0, 3).map((record) => <span key={record.id}>{record.exerciseName} · {record.recordType === 'MAX_REPS_AT_WEIGHT' ? `${record.value} reps` : `${displayWeight(record.value, unit).toFixed(1)} ${unit}`}</span>)}</div><button type="button" onClick={() => setNewRecords([])} aria-label="Dismiss personal record notification">×</button>
+      </section>}
       {finished ? <section className="workout-finished-panel">
         <span className="finished-icon"><Check size={25} /></span><span className="eyebrow">SESSION SAVED</span><h2>Strong work.</h2><p>{workout.name} · {formatTime(workout.durationSeconds || 0)}</p><Link className="button" to={`/app/workouts/history/${workout.id}`}>View workout summary</Link>
       </section> : <div className="live-layout">

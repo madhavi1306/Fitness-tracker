@@ -55,6 +55,14 @@ test('API health and protected routes respond with expected status codes', async
     ['/api/workouts/example', 'GET'],
     ['/api/workouts/example/sets', 'POST'],
     ['/api/workouts/example/finish', 'POST'],
+    ['/api/progress/dashboard', 'GET'],
+    ['/api/progress/weekly-volume', 'GET'],
+    ['/api/progress/strength', 'GET'],
+    ['/api/progress/muscle-split', 'GET'],
+    ['/api/progress/records', 'GET'],
+    ['/api/progress/overall', 'GET'],
+    ['/api/weight', 'POST'],
+    ['/api/weight/history', 'GET'],
   ];
   for (const [path, method] of protectedPhaseTwoRoutes) {
     const response = await fetch(`${baseUrl}${path}`, {

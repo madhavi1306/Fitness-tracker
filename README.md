@@ -1,6 +1,6 @@
 # Fitness Workout Builder & Progressive Overload Logger
 
-Formline is the visual brand for this application. Phase 1 account registration, login, profile, and dashboard remain in place. Phase 2 adds an authenticated exercise library, workout templates, live workout logging, timers, and PostgreSQL-backed workout history. Nutrition, progress calculations, and voice features are not included in this phase.
+Formline is the visual brand for this application. Phase 1 account registration, login, and profile remain in place. Phase 2 adds the authenticated exercise library, workout templates, live workout logging, timers, and workout history. Phase 3 adds workout analytics, personal records, progress charts, and body-weight tracking. Nutrition and voice features are not included.
 
 ## Requirements
 
@@ -31,7 +31,7 @@ npm run db:generate
 npm run db:migrate
 ```
 
-Prisma creates the account and workout tables, including the exercise library, templates, sessions, and logged sets. The migration command also regenerates Prisma Client.
+Prisma creates the account and workout tables, including the exercise library, templates, sessions, logged sets, personal records, and body-weight history. The migration command also regenerates Prisma Client.
 
 6. Load the built-in exercise library:
 
@@ -92,9 +92,29 @@ Authenticated requests use `Authorization: Bearer <token>`. Password hashes are 
 
 Workout weights are stored in kilograms; the UI converts the selected display unit. Server-side validation enforces categories, valid sets/reps, nonnegative weights, exercise membership, set limits, session ownership, and one-time set logging.
 
+## Phase 3 progress and analytics
+
+- The dashboard and `/app/progress` use completed workout records, not placeholder statistics. The date-range selector supports This Week, This Month, Last 30 Days, and All Time. The kg/lbs selector changes displayed values; workout and body-weight values remain stored in kilograms.
+- Volume is `weight × reps` for each completed set, summed for the selected time period, day, exercise, or muscle group. Estimated 1RM uses the Epley formula: `weight × (1 + reps / 30)`.
+- Logging a completed set checks for four PR types: maximum weight, estimated 1RM, maximum reps at the same weight, and exercise volume. New records are saved and surfaced in the live workout and progress view.
+- The dashboard includes workout/volume/PR/streak cards, weekday volume, strength progression, muscle-group split, recent workouts, and recent PRs. Overall Progress includes workout totals, strength and exercise-volume trends, PR history, weekly summary, and body-weight history.
+- Body-weight entries can be added or updated for a date from `/app/progress`; starting weight is kept separately from subsequent weigh-ins.
+
+Authenticated API endpoints:
+
+- `GET /api/progress/dashboard?range=thisWeek`
+- `GET /api/progress/weekly-volume?range=thisWeek`
+- `GET /api/progress/strength?range=thisWeek`
+- `GET /api/progress/muscle-split?range=thisWeek`
+- `GET /api/progress/records?range=thisWeek`
+- `GET /api/progress/overall?range=thisWeek`
+- `POST /api/weight` records or updates a dated weigh-in; `GET /api/weight/history` retrieves the user's history.
+
+The supported range values are `thisWeek`, `thisMonth`, `last30Days`, and `allTime`. Every endpoint is scoped to the authenticated user. Run the migrations before using PostgreSQL mode so the personal-record and weight-history tables exist.
+
 ## Checks
 
-Run the backend validation/API tests, frontend production build, and Prisma schema validation:
+Run the backend calculation/API tests, frontend production build, and Prisma schema validation:
 
 ```powershell
 npm test
@@ -102,7 +122,7 @@ npm run build
 npm run db:validate -w backend
 ```
 
-The automated API tests verify authentication gates and validation without requiring a database. Full data-flow testing requires PostgreSQL. With the database configured, migration applied, and seed loaded, register/sign in, browse/filter exercises, create/edit/delete a custom exercise, create/edit/delete a template, start a workout, pause/resume and log sets, use/skip rest, finish it, and open the saved history detail. Unauthenticated requests to the Phase 1 or Phase 2 APIs should return `401`.
+The automated tests cover analytics calculations, Epley estimates, PR detection, date ranges, unit conversion, authentication, and API validation. They do not prove PostgreSQL persistence. Full persistence testing requires PostgreSQL: apply migrations, seed exercises, register/sign in, complete and review workouts, log body weight, and verify the records after restarting the app. In `MEMORY_MODE=true`, data is temporary and resets when the backend restarts.
 
 For Prisma's interactive data browser:
 
@@ -110,16 +130,12 @@ For Prisma's interactive data browser:
 npm run db:studio
 ```
 
-## Phase 1 dashboard
+## GitHub Push 3
 
-The existing dashboard layout and Phase 1 profile/authentication are preserved. Dashboard analytics and nutrition remain future work; Phase 2 does not fabricate workout statistics.
-
-## GitHub Push 2
-
-After running the checks and reviewing the changes, push this phase from the project root:
+After running the checks and reviewing the changes, push Phase 3 from the project root:
 
 ```powershell
-git add README.md backend frontend
-git commit -m "feat: add exercise library and live workout logging"
+git add README.md backend frontend package-lock.json
+git commit -m "feat: add workout analytics and progress tracking"
 git push origin main
 ```
