@@ -1,4 +1,5 @@
 import bcrypt from 'bcrypt';
+import { seedFoods } from '../data/foods.js';
 
 const now = () => new Date();
 const id = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
@@ -37,6 +38,15 @@ export const memoryState = {
   sessions: [],
   personalRecords: [],
   weightEntries: [],
+  foods: seedFoods.map((food) => ({
+    id: id('food'),
+    ...food,
+    ownerId: null,
+    createdAt: now(),
+    updatedAt: now(),
+  })),
+  foodLogs: [],
+  nutritionTargets: [],
 };
 
 function matchesWhere(item, where = {}) {
@@ -131,7 +141,15 @@ export const memoryPrisma = {
       return user ? selectObject(user, select) : null;
     },
     create: async ({ data }) => {
-      const user = { id: id('user'), ...data, createdAt: now(), updatedAt: now() };
+      const user = {
+        id: id('user'),
+        ...data,
+        activityLevel: data.activityLevel || 'MODERATELY_ACTIVE',
+        dietaryPreference: data.dietaryPreference || 'NONE',
+        startingWeightKg: data.startingWeightKg ?? data.currentWeightKg,
+        createdAt: now(),
+        updatedAt: now(),
+      };
       memoryState.users.push(user);
       return user;
     },
@@ -309,6 +327,87 @@ export const memoryPrisma = {
       const entry = { id: id('weight'), ...create, createdAt: now(), updatedAt: now() };
       memoryState.weightEntries.push(entry);
       return entry;
+    },
+  },
+  food: {
+    findMany: async ({ where, orderBy, take } = {}) => {
+      let foods = [...memoryState.foods];
+      if (where?.AND) {
+        for (const condition of where.AND) {
+          if (condition.OR) {
+            foods = foods.filter((food) => condition.OR.some((owner) =>
+              Object.prototype.hasOwnProperty.call(owner, 'ownerId') && food.ownerId === owner.ownerId));
+          } else if (condition.name?.contains) {
+            const search = condition.name.contains.toLowerCase();
+            foods = foods.filter((food) => food.name.toLowerCase().includes(search));
+          }
+        }
+      } else if (where?.OR) {
+        foods = foods.filter((food) => where.OR.some((owner) =>
+          Object.prototype.hasOwnProperty.call(owner, 'ownerId') && food.ownerId === owner.ownerId));
+      }
+      foods = applySort(foods, orderBy);
+      return take ? foods.slice(0, take) : foods;
+    },
+    findFirst: async ({ where }) => memoryState.foods.find((food) => {
+      if (where.id && food.id !== where.id) return false;
+      if (Object.prototype.hasOwnProperty.call(where, 'ownerId') && food.ownerId !== where.ownerId) return false;
+      if (where.name?.equals && food.name.toLowerCase() !== where.name.equals.toLowerCase()) return false;
+      if (where.OR && !where.OR.some((owner) =>
+        Object.prototype.hasOwnProperty.call(owner, 'ownerId') && food.ownerId === owner.ownerId)) return false;
+      return true;
+    }) || null,
+    create: async ({ data }) => {
+      const food = { id: id('food'), ...data, createdAt: now(), updatedAt: now() };
+      memoryState.foods.push(food);
+      return food;
+    },
+  },
+  foodLog: {
+    findMany: async ({ where, orderBy } = {}) => {
+      let entries = memoryState.foodLogs.filter((entry) => entry.ownerId === where?.ownerId);
+      if (where?.loggedAt?.gte) entries = entries.filter((entry) => new Date(entry.loggedAt) >= where.loggedAt.gte);
+      if (where?.loggedAt?.lte) entries = entries.filter((entry) => new Date(entry.loggedAt) <= where.loggedAt.lte);
+      const direction = orderBy?.loggedAt === 'asc' ? 1 : -1;
+      return [...entries].sort((a, b) => direction * (new Date(a.loggedAt) - new Date(b.loggedAt)));
+    },
+    findFirst: async ({ where }) => memoryState.foodLogs.find((entry) =>
+      entry.id === where.id && entry.ownerId === where.ownerId) || null,
+    create: async ({ data }) => {
+      const entry = { id: id('food_log'), ...data, createdAt: now(), updatedAt: now() };
+      memoryState.foodLogs.push(entry);
+      return entry;
+    },
+    update: async ({ where, data }) => {
+      const index = memoryState.foodLogs.findIndex((entry) => entry.id === where.id);
+      if (index < 0) throw new Error('Food log entry not found');
+      memoryState.foodLogs[index] = { ...memoryState.foodLogs[index], ...data, updatedAt: now() };
+      return memoryState.foodLogs[index];
+    },
+    delete: async ({ where }) => {
+      const index = memoryState.foodLogs.findIndex((entry) => entry.id === where.id);
+      if (index < 0) throw new Error('Food log entry not found');
+      const [entry] = memoryState.foodLogs.splice(index, 1);
+      return entry;
+    },
+  },
+  nutritionTarget: {
+    findUnique: async ({ where }) => memoryState.nutritionTargets.find((target) => target.ownerId === where.ownerId) || null,
+    update: async ({ where, data }) => {
+      const target = memoryState.nutritionTargets.find((item) => item.ownerId === where.ownerId);
+      if (!target) throw new Error('Nutrition target not found');
+      Object.assign(target, data, { updatedAt: now() });
+      return target;
+    },
+    upsert: async ({ where, create, update }) => {
+      const existing = memoryState.nutritionTargets.find((target) => target.ownerId === where.ownerId);
+      if (existing) {
+        Object.assign(existing, update, { updatedAt: now() });
+        return existing;
+      }
+      const target = { id: id('nutrition_target'), ...create, createdAt: now(), updatedAt: now() };
+      memoryState.nutritionTargets.push(target);
+      return target;
     },
   },
   $transaction: async (callback) => callback({

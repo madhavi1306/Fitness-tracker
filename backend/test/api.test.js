@@ -43,7 +43,7 @@ test('API health and protected routes respond with expected status codes', async
   const me = await fetch(`${baseUrl}/api/auth/me`);
   assert.equal(me.status, 401);
 
-  const protectedPhaseTwoRoutes = [
+  const protectedRoutes = [
     ['/api/exercises', 'GET'],
     ['/api/exercises', 'POST'],
     ['/api/exercises/example', 'GET'],
@@ -63,8 +63,18 @@ test('API health and protected routes respond with expected status codes', async
     ['/api/progress/overall', 'GET'],
     ['/api/weight', 'POST'],
     ['/api/weight/history', 'GET'],
+    ['/api/nutrition/today', 'GET'],
+    ['/api/nutrition/food', 'POST'],
+    ['/api/nutrition/food/example', 'PUT'],
+    ['/api/nutrition/food/example', 'DELETE'],
+    ['/api/nutrition/history', 'GET'],
+    ['/api/nutrition/targets', 'GET'],
+    ['/api/nutrition/targets', 'POST'],
+    ['/api/foods', 'GET'],
+    ['/api/foods/search', 'GET'],
+    ['/api/foods', 'POST'],
   ];
-  for (const [path, method] of protectedPhaseTwoRoutes) {
+  for (const [path, method] of protectedRoutes) {
     const response = await fetch(`${baseUrl}${path}`, {
       method,
       headers: { 'Content-Type': 'application/json' },

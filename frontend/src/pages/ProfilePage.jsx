@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Check, Pencil, UserRound } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { apiRequest } from '../services/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useUnits } from '../context/UnitContext.jsx';
@@ -12,6 +13,7 @@ export default function ProfilePage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [nutritionTarget, setNutritionTarget] = useState(null);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -46,6 +48,14 @@ export default function ProfilePage() {
   }
 
   const weightBounds = unit === 'kg' ? { min: 25, max: 400 } : { min: 56, max: 880 };
+  useEffect(() => {
+    let active = true;
+    apiRequest('/nutrition/targets', { token })
+      .then(({ target }) => { if (active) setNutritionTarget(target); })
+      .catch(() => { if (active) setNutritionTarget(null); });
+    return () => { active = false; };
+  }, [token, user?.updatedAt]);
+
   return (
     <div className="profile-page page-enter">
       <section className="profile-intro"><div className="profile-large-avatar">{user?.fullName?.slice(0, 1).toUpperCase()}<span><UserRound size={15} /></span></div><div><span className="eyebrow">YOUR ACCOUNT</span><h2>{user?.fullName}</h2><p>{user?.email}</p></div><button className="button button-outline profile-edit-button" type="button" onClick={() => { setEditing(!editing); setError(''); setNotice(''); }}><Pencil size={15} />{editing ? 'Cancel editing' : 'Edit profile'}</button></section>
@@ -66,6 +76,15 @@ export default function ProfilePage() {
         </div>
         {editing && <div className="profile-form-actions"><span>Weight is stored in kilograms in your account.</span><button className="button" type="submit" disabled={busy}>{busy ? 'Saving...' : 'Save changes'} <Check size={16} /></button></div>}
       </form>
+      <section className="dashboard-section profile-nutrition-target">
+        <div className="section-heading"><div><span className="eyebrow">GOAL SUPPORT</span><h3>Nutrition estimates</h3></div><Link className="quiet-link" to="/app/diet">Open nutrition <span aria-hidden="true">→</span></Link></div>
+        {nutritionTarget ? <div className="profile-nutrition-values">
+          <span><small>DAILY CALORIES</small><strong>{nutritionTarget.dailyCalories.toLocaleString()} kcal</strong></span>
+          <span><small>PROTEIN</small><strong>{Math.round(nutritionTarget.proteinGrams)} g</strong></span>
+          <span><small>MAINTENANCE ESTIMATE</small><strong>{nutritionTarget.maintenanceCalories.toLocaleString()} kcal</strong></span>
+          <p>{nutritionTarget.estimateDisclaimer}</p>
+        </div> : <p className="nutrition-empty-small">Nutrition estimates will appear after the database migration is applied.</p>}
+      </section>
       <div className="profile-account-note"><span className="account-note-dot" /><p>Account created {user?.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : ''}</p></div>
     </div>
   );

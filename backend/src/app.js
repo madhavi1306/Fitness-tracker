@@ -8,6 +8,8 @@ import templateRoutes from './routes/template.routes.js';
 import workoutRoutes from './routes/workout.routes.js';
 import progressRoutes from './routes/progress.routes.js';
 import weightRoutes from './routes/weight.routes.js';
+import nutritionRoutes from './routes/nutrition.routes.js';
+import foodsRoutes from './routes/foods.routes.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 
 export const app = express();
@@ -25,5 +27,7 @@ app.use('/api/templates', templateRoutes);
 app.use('/api/workouts', workoutRoutes);
 app.use('/api/progress', progressRoutes);
 app.use('/api/weight', weightRoutes);
+app.use('/api/nutrition', nutritionRoutes);
+app.use('/api/foods', foodsRoutes);
 app.use(notFound);
 app.use(errorHandler);

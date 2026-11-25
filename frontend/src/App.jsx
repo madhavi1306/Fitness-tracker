@@ -6,7 +6,7 @@ import LoginPage from './pages/LoginPage.jsx';
 import RegisterPage from './pages/RegisterPage.jsx';
 import DashboardPage from './pages/DashboardPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
-import FeaturePage from './pages/FeaturePage.jsx';
+import NutritionPage from './pages/NutritionPage.jsx';
 import ExerciseLibraryPage from './pages/ExerciseLibraryPage.jsx';
 import WorkoutBuilderPage from './pages/WorkoutBuilderPage.jsx';
 import LiveWorkoutPage from './pages/LiveWorkoutPage.jsx';
@@ -39,7 +39,7 @@ export default function App() {
         <Route path="workouts/history" element={<WorkoutHistoryPage />} />
         <Route path="workouts/history/:id" element={<WorkoutHistoryPage />} />
         <Route path="exercises" element={<ExerciseLibraryPage />} />
-        <Route path="diet" element={<FeaturePage title="Nutrition" phase="4" />} />
+        <Route path="diet" element={<NutritionPage />} />
         <Route path="progress" element={<ProgressPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

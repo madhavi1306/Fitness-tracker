@@ -1,6 +1,6 @@
 # Fitness Workout Builder & Progressive Overload Logger
 
-Formline is the visual brand for this application. Phase 1 account registration, login, and profile remain in place. Phase 2 adds the authenticated exercise library, workout templates, live workout logging, timers, and workout history. Phase 3 adds workout analytics, personal records, progress charts, and body-weight tracking. Nutrition and voice features are not included.
+Formline is the visual brand for this application. Phase 1 account registration, login, and profile remain in place. Phase 2 adds the authenticated exercise library, workout templates, live workout logging, timers, and workout history. Phase 3 adds workout analytics, personal records, progress charts, and body-weight tracking. Phase 4 adds food search, daily meal logging, nutrition estimates, and goal-aware suggestions. Voice features are not included.
 
 ## Requirements
 
@@ -31,7 +31,7 @@ npm run db:generate
 npm run db:migrate
 ```
 
-Prisma creates the account and workout tables, including the exercise library, templates, sessions, logged sets, personal records, and body-weight history. The migration command also regenerates Prisma Client.
+Prisma creates the account and workout tables, including the exercise library, templates, sessions, logged sets, personal records, body-weight history, food library, nutrition targets, and food logs. The migration command also regenerates Prisma Client.
 
 6. Load the built-in exercise library:
 
@@ -39,7 +39,7 @@ Prisma creates the account and workout tables, including the exercise library, t
 npm run db:seed -w backend
 ```
 
-The seed command is safe to run again; it adds missing built-in exercises without duplicating them.
+The seed command is safe to run again; it adds missing built-in exercises and approximate food entries without duplicating them.
 
 ## Run the application
 
@@ -63,7 +63,7 @@ The Vite development server proxies `/api` requests to the Express API. The back
 
 ### Local runtime fallback
 
-When PostgreSQL is not installed yet, `backend/.env` may use `MEMORY_MODE=true`. This starts the complete app and seeded exercise library with temporary in-memory authentication and workout data; data resets when the backend restarts. It does not replace PostgreSQL.
+When PostgreSQL is not installed yet, `backend/.env` may use `MEMORY_MODE=true`. This starts the complete app and seeded exercise and food libraries with temporary in-memory authentication, workout, and nutrition data; data resets when the backend restarts. It does not replace PostgreSQL.
 
 To switch to PostgreSQL, set `MEMORY_MODE=false` (or remove it), set a real `DATABASE_URL`, apply migrations, seed the library, and restart `npm run dev`.
 
@@ -112,6 +112,25 @@ Authenticated API endpoints:
 
 The supported range values are `thisWeek`, `thisMonth`, `last30Days`, and `allTime`. Every endpoint is scoped to the authenticated user. Run the migrations before using PostgreSQL mode so the personal-record and weight-history tables exist.
 
+## Phase 4 nutrition and goal modes
+
+- `/app/diet` is the Nutrition page. Search the built-in Indian food library, log servings by meal, edit quantity/meal, delete entries, review the last 30 days, create personal foods, and add suggested foods or meal combinations. The dashboard and profile also show nutrition targets.
+- The seed includes approximate values for eggs, chapati, cooked rice, dal, milk, curd, paneer, banana, chicken, chickpeas, idli, dosa, upma, oats, vegetables, fruits, tofu, and other common foods. Nutrients are values per listed serving, and a log quantity scales calories, protein, carbohydrate, and fat. Each log stores a nutrient snapshot so later food-library changes do not rewrite history.
+- Calories use a sex-neutral Mifflin-style estimate: `BMR = 10 × weight(kg) + 6.25 × height(cm) − 5 × age − 78`, floored at 1,200 kcal, then multiplied by the selected activity factor (1.2–1.9). Goal adjustments are modest: +200 kcal for gain, −300 kcal for loss (not below estimated BMR), no change for maintenance, and +100 kcal for strength. Users under 18 receive no goal-based calorie adjustment and see a professional-guidance note.
+- Protein estimates use 1.4 g/kg for maintenance, 1.6 g/kg for gain, and 1.8 g/kg for weight loss or strength. Fat is estimated at 28% of target calories; carbohydrates use the remaining calories after protein and fat. These values are estimates, not medical advice. They do not account for individual medical needs, and the UI cautions against extreme restriction.
+- Food values are approximate and vary by recipe, brand, and serving size. For example, 2 eggs + 2 chapatis + 1 bowl of dal is estimated at 564 kcal, 29.6 g protein, 62.8 g carbs, and 20.6 g fat.
+- Weight gain/loss progress uses the profile's starting and target weight plus recorded weigh-ins. Food suggestions filter by dietary preference and prioritize remaining protein/calorie needs; meal suggestions are optional balanced combinations.
+
+Authenticated API endpoints:
+
+- `GET /api/foods` and `GET /api/foods/search?search=dal` list/search built-in foods and the current user's custom foods; `POST /api/foods` creates a custom food with per-serving values.
+- `GET /api/nutrition/today?date=YYYY-MM-DD` returns that day's logs, nutrition totals, targets, remaining amounts, and suggestions.
+- `POST /api/nutrition/food` creates a log; `PUT /api/nutrition/food/:id` updates an owned log; `DELETE /api/nutrition/food/:id` removes an owned log.
+- `GET /api/nutrition/history?from=YYYY-MM-DD&to=YYYY-MM-DD` returns the user's food history (defaults to the last 30 days).
+- `GET /api/nutrition/targets` reads or calculates targets from the profile. `POST /api/nutrition/targets` recalculates when sent an empty object, or saves validated custom targets.
+
+The new Prisma migration is `20261125030000_nutrition_tracking`. Apply migrations and rerun the seed command when switching to PostgreSQL. All food logs, custom foods, and nutrition targets are scoped to their owner.
+
 ## Checks
 
 Run the backend calculation/API tests, frontend production build, and Prisma schema validation:
@@ -122,7 +141,7 @@ npm run build
 npm run db:validate -w backend
 ```
 
-The automated tests cover analytics calculations, Epley estimates, PR detection, date ranges, unit conversion, authentication, and API validation. They do not prove PostgreSQL persistence. Full persistence testing requires PostgreSQL: apply migrations, seed exercises, register/sign in, complete and review workouts, log body weight, and verify the records after restarting the app. In `MEMORY_MODE=true`, data is temporary and resets when the backend restarts.
+The automated tests cover nutrition estimates, serving quantity/macronutrient calculations, dietary suggestions, validation, authentication, and the earlier workout analytics. They do not prove PostgreSQL persistence. Full persistence testing requires PostgreSQL: apply migrations, seed exercises and foods, register/sign in, log and edit food entries, review history, and verify records after restarting the app. In `MEMORY_MODE=true`, data is temporary and resets when the backend restarts.
 
 For Prisma's interactive data browser:
 
@@ -130,12 +149,12 @@ For Prisma's interactive data browser:
 npm run db:studio
 ```
 
-## GitHub Push 3
+## GitHub Push 4
 
-After running the checks and reviewing the changes, push Phase 3 from the project root:
+After running the checks and reviewing the changes, push Phase 4 from the project root:
 
 ```powershell
 git add README.md backend frontend package-lock.json
-git commit -m "feat: add workout analytics and progress tracking"
+git commit -m "feat: add nutrition tracking and fitness goal modes"
 git push origin main
 ```

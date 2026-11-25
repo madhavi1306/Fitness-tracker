@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { seedFoods } from '../src/data/foods.js';
 
 const prisma = new PrismaClient();
 
@@ -28,7 +29,13 @@ try {
       });
     }
   }
-  console.log(`Exercise seed complete (${exercises.length} built-in exercises).`);
+  for (const food of seedFoods) {
+    const existing = await prisma.food.findFirst({
+      where: { ownerId: null, name: { equals: food.name, mode: 'insensitive' } },
+    });
+    if (!existing) await prisma.food.create({ data: { ...food, ownerId: null } });
+  }
+  console.log(`Seed complete (${exercises.length} built-in exercises, ${seedFoods.length} built-in foods).`);
 } finally {
   await prisma.$disconnect();
 }

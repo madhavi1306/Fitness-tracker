@@ -9,7 +9,7 @@ const links = [
   { to: '/app/workouts', label: 'Workout', icon: Dumbbell, end: true },
   { to: '/app/workouts/history', label: 'Workout history', icon: History },
   { to: '/app/exercises', label: 'Exercise library', icon: Activity },
-  { to: '/app/diet', label: 'Diet plan', icon: Apple },
+  { to: '/app/diet', label: 'Nutrition', icon: Apple },
   { to: '/app/progress', label: 'Overall progress', icon: BarChart3 },
 ];
 
@@ -29,7 +29,7 @@ export default function Sidebar() {
           {links.map(({ to, label, icon: Icon, end }) => (
             <NavLink key={to} to={to} end={end} onClick={() => setOpen(false)} className={({ isActive }) => `nav-link${isActive ? ' nav-link-active' : ''}`}>
               <Icon size={18} strokeWidth={1.8} /><span>{label}</span>
-              {label !== 'Dashboard' && <span className="nav-phase">{label === 'Diet plan' ? '04' : label === 'Overall progress' ? '03' : '02'}</span>}
+              {label !== 'Dashboard' && <span className="nav-phase">{label === 'Nutrition' ? '04' : label === 'Overall progress' ? '03' : '02'}</span>}
             </NavLink>
           ))}
         </nav>

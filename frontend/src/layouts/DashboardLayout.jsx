@@ -8,7 +8,7 @@ const pageTitles = {
   '/app/workouts': 'Workout builder',
   '/app/workouts/history': 'Workout history',
   '/app/exercises': 'Exercise library',
-  '/app/diet': 'Diet plan',
+  '/app/diet': 'Nutrition',
   '/app/progress': 'Overall progress',
 };
 

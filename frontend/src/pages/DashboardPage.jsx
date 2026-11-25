@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useUnits } from '../context/UnitContext.jsx';
 import { apiRequest } from '../services/api.js';
 import { displayWeight } from '../utils/units.js';
+import { localDateString } from '../utils/dates.js';
 
 const charts = import('../components/ProgressCharts.jsx');
 const WeeklyVolumeChart = lazy(() => charts.then((module) => ({ default: module.WeeklyVolumeChart })));
@@ -17,7 +18,7 @@ const quickActions = [
   { title: 'Start workout', detail: 'Build your session', icon: Dumbbell, to: '/app/workouts', phase: '02' },
   { title: 'Create template', detail: 'Plan a routine', icon: Layers3, to: '/app/workouts', phase: '02' },
   { title: 'Add exercise', detail: 'Browse movements', icon: Activity, to: '/app/exercises', phase: '02' },
-  { title: 'Diet plan', detail: 'Shape your nutrition', icon: Weight, to: '/app/diet', phase: '04' },
+  { title: 'Nutrition', detail: 'Log meals and review targets', icon: Weight, to: '/app/diet', phase: '04' },
   { title: 'Overall progress', detail: 'See your trends', icon: Award, to: '/app/progress', phase: '03' },
 ];
 
@@ -40,6 +41,8 @@ export default function DashboardPage() {
   const [volume, setVolume] = useState([]);
   const [strength, setStrength] = useState({ exercises: [], points: [] });
   const [muscles, setMuscles] = useState([]);
+  const [nutrition, setNutrition] = useState(null);
+  const [nutritionLoading, setNutritionLoading] = useState(true);
   const [selectedExercise, setSelectedExercise] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -67,6 +70,16 @@ export default function DashboardPage() {
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [range, token]);
+
+  useEffect(() => {
+    let active = true;
+    setNutritionLoading(true);
+    apiRequest(`/nutrition/today?date=${encodeURIComponent(localDateString())}`, { token })
+      .then((result) => { if (active) setNutrition(result); })
+      .catch(() => { if (active) setNutrition(null); })
+      .finally(() => { if (active) setNutritionLoading(false); });
+    return () => { active = false; };
+  }, [token]);
 
   async function changeExercise(event) {
     const value = event.target.value;
@@ -104,6 +117,17 @@ export default function DashboardPage() {
           <div className="quick-action-list">{quickActions.map(({ title, detail, icon: Icon, to, phase }) => <Link className="quick-action" key={title} to={to}><span className="quick-action-icon"><Icon size={18} /></span><span className="quick-action-copy"><strong>{title}</strong><small>{detail}</small></span><span className="phase-chip">PHASE {phase}</span><ArrowRight className="quick-arrow" size={16} /></Link>)}</div>
         </section>
       </div>
+      <section className="dashboard-section dashboard-nutrition-card">
+        <div className="section-heading">
+          <div><span className="eyebrow">DAILY NUTRITION</span><h2>Food and fuel</h2></div>
+          <Link className="quiet-link" to="/app/diet">Open nutrition <ArrowRight size={13} /></Link>
+        </div>
+        {nutritionLoading ? <p className="nutrition-dashboard-unavailable">Loading today's nutrition...</p> : nutrition ? <div className="dashboard-nutrition-summary">
+          <div><strong>{Math.round(nutrition.totals.calories).toLocaleString()} <small>/ {nutrition.target.dailyCalories.toLocaleString()} kcal</small></strong><span>Calories today</span><div className="dashboard-nutrition-track"><i style={{ width: `${Math.min(100, nutrition.totals.calories / nutrition.target.dailyCalories * 100)}%` }} /></div></div>
+          <div><strong>{Math.round(nutrition.totals.proteinGrams)} <small>/ {Math.round(nutrition.target.proteinGrams)} g</small></strong><span>Protein today</span><div className="dashboard-nutrition-track dashboard-protein-track"><i style={{ width: `${Math.min(100, nutrition.totals.proteinGrams / nutrition.target.proteinGrams * 100)}%` }} /></div></div>
+          <p>{nutrition.logs.length ? `${nutrition.logs.length} food entries logged today.` : 'Start a food log to see your daily nutrition progress.'}</p>
+        </div> : <p className="nutrition-dashboard-unavailable">Nutrition targets are unavailable. Open Nutrition to check your setup.</p>}
+      </section>
       <div className="dashboard-progress-grid">
         <section className="dashboard-section">
           <div className="section-heading"><div><span className="eyebrow">STRENGTH PROGRESSION</span><h2>Estimated 1RM over time</h2></div>

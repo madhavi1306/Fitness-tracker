@@ -30,6 +30,13 @@ enum DietaryPreference {
   OTHER
 }
 
+enum MealType {
+  BREAKFAST
+  LUNCH
+  DINNER
+  SNACKS
+}
+
 model User {
   id                String             @id @default(cuid())
   fullName          String
@@ -50,6 +57,9 @@ model User {
   workoutSessions   WorkoutSession[]
   personalRecords   PersonalRecord[]
   weightEntries     WeightEntry[]
+  foods             Food[]             @relation("CustomFoods")
+  foodLogs          FoodLog[]
+  nutritionTarget   NutritionTarget?
 
   @@index([createdAt])
 }
@@ -184,4 +194,63 @@ model WeightEntry {
 
   @@unique([ownerId, date])
   @@index([ownerId, date])
+}
+
+model Food {
+  id                 String     @id @default(cuid())
+  name               String
+  category           String
+  servingUnit        String
+  servingSize        Float
+  calories           Float
+  proteinGrams       Float
+  carbohydratesGrams Float
+  fatGrams           Float
+  dietaryTags        String[]   @default([])
+  ownerId            String?
+  owner              User?      @relation("CustomFoods", fields: [ownerId], references: [id], onDelete: Cascade)
+  logs               FoodLog[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@unique([ownerId, name])
+  @@index([category])
+}
+
+model FoodLog {
+  id                 String   @id @default(cuid())
+  ownerId            String
+  owner              User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  foodId             String?
+  food               Food?    @relation(fields: [foodId], references: [id], onDelete: SetNull)
+  foodName           String
+  servingUnit        String
+  servingSize        Float
+  quantity           Float
+  mealType           MealType
+  calories           Float
+  proteinGrams       Float
+  carbohydratesGrams Float
+  fatGrams           Float
+  loggedAt           DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([ownerId, loggedAt])
+  @@index([ownerId, mealType, loggedAt])
+}
+
+model NutritionTarget {
+  id                    String   @id @default(cuid())
+  ownerId               String   @unique
+  owner                 User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  maintenanceCalories   Int
+  dailyCalories         Int
+  proteinGrams          Float
+  carbohydratesGrams    Float
+  fatGrams              Float
+  isCustom              Boolean  @default(false)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
 }
