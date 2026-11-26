@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const muscleGroups = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core'];
 export const equipmentTypes = ['Barbell', 'Dumbbells', 'Machine', 'Cable', 'Bodyweight', 'Resistance Bands'];
 export const difficultyLevels = ['Beginner', 'Intermediate', 'Advanced'];
+export const exerciseTypes = ['Compound', 'Isolation', 'Core', 'Cardio', 'Mobility'];
 
 const text = (max = 500) => z.string().trim().min(1).max(max);
 const optionalNotes = z.string().trim().max(1000).optional().nullable();
@@ -14,6 +15,7 @@ export const exerciseSchema = z.object({
   equipment: z.enum(equipmentTypes),
   description: text(1000),
   difficulty: z.enum(difficultyLevels),
+  exerciseType: z.enum(exerciseTypes),
   instructions: z.array(text(300)).min(1).max(12),
   imageUrl,
 }).strict();
@@ -42,8 +44,11 @@ export const templateUpdateSchema = z.object(templateFields).partial().strict()
   .refine((value) => Object.keys(value).length > 0, 'At least one field is required');
 
 export const startWorkoutSchema = z.object({
-  templateId: z.string().min(1).max(100),
-}).strict();
+  templateId: z.string().min(1).max(100).optional(),
+  planDayId: z.string().min(1).max(100).optional(),
+}).strict().refine((value) => Boolean(value.templateId) !== Boolean(value.planDayId), {
+  message: 'Choose exactly one workout template or scheduled workout day',
+});
 
 export const workoutSetSchema = z.object({
   exerciseId: z.string().min(1).max(100),

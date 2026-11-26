@@ -58,10 +58,12 @@ test('bcrypt hashes can be verified and public users omit password hashes', asyn
       equipment: 'Dumbbells',
       description: 'A squat variation.',
       difficulty: 'Beginner',
+      exerciseType: 'Compound',
       instructions: ['Hold one dumbbell at your chest.', 'Squat with control.'],
     };
     assert.equal(exerciseSchema.safeParse(exercise).success, true);
     assert.equal(exerciseSchema.safeParse({ ...exercise, muscleGroup: 'Other' }).success, false);
+    assert.equal(exerciseSchema.safeParse({ ...exercise, exerciseType: 'Unsupported' }).success, false);
     assert.equal(exerciseSchema.safeParse({ ...exercise, instructions: [] }).success, false);
   });
 

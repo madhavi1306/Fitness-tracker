@@ -13,6 +13,7 @@ const exerciseSelect = {
   equipment: true,
   description: true,
   difficulty: true,
+  exerciseType: true,
   instructions: true,
   imageUrl: true,
   ownerId: true,

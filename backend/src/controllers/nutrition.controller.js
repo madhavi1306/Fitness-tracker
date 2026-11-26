@@ -15,6 +15,11 @@ import {
   isRealNutritionDate,
   nutritionTargetSchema,
 } from '../utils/nutritionValidation.js';
+import {
+  dietPlanSchema,
+  generateDietPlanWeekWithProvider,
+  generateDietPlanWithProvider,
+} from '../services/dietPlan.service.js';
 
 const searchSchema = z.string().trim().max(100);
 
@@ -286,6 +291,224 @@ export async function deleteFoodLog(req, res, next) {
     const existing = await prisma.foodLog.findFirst({ where: { id: req.params.id, ownerId: req.user.id } });
     if (!existing) return res.status(404).json({ error: 'Food log entry not found' });
     await prisma.foodLog.delete({ where: { id: existing.id } });
+    return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
+}
+
+const generateDietPlanRequestSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  goal: z.enum(['WEIGHT_GAIN', 'WEIGHT_LOSS', 'MAINTAIN_WEIGHT', 'BUILD_STRENGTH']).optional(),
+  dietaryPreference: z.enum(['NONE', 'VEGAN', 'VEGETARIAN', 'PESCATARIAN', 'OTHER']).optional(),
+  request: z.string().trim().max(300).optional(),
+}).strict();
+
+export async function generateDietPlanRequest(req, res, next) {
+  const parsed = generateDietPlanRequestSchema.safeParse(req.body);
+  if (!parsed.success) return invalid(res, parsed, 'Enter a valid nutrition plan request');
+  const date = parsed.data.date || new Date().toISOString().slice(0, 10);
+  if (!isRealNutritionDate(date)) return res.status(400).json({ error: 'Date must be a real date in YYYY-MM-DD format' });
+  try {
+    const [foods, target] = await Promise.all([
+      getVisibleFoods(req.user.id, ''),
+      getOrCreateTarget(req.user),
+    ]);
+    const message = parsed.data.request
+      || [
+        'create a nutrition plan',
+        parsed.data.goal ? `for ${parsed.data.goal.replace('_', ' ').toLowerCase()}` : '',
+        parsed.data.dietaryPreference ? `for ${parsed.data.dietaryPreference.toLowerCase().replace('_', ' ')}` : '',
+      ].filter(Boolean).join(' ');
+    const generated = await generateDietPlanWithProvider({
+      message,
+      user: {
+        ...req.user,
+        fitnessGoal: parsed.data.goal || req.user.fitnessGoal,
+        dietaryPreference: parsed.data.dietaryPreference || req.user.dietaryPreference,
+      },
+      foods,
+      target,
+      date,
+    });
+    let plan = generated.plan;
+    if (!plan) return res.status(422).json({ error: 'No complete meal combination could be generated from the available food library.' });
+    if (parsed.data.goal) plan.goal = parsed.data.goal;
+    plan = dietPlanSchema.parse(plan);
+    const { start, end } = dateBounds(date);
+    const consumed = summarizeFoodLogs(await prisma.foodLog.findMany({
+      where: { ownerId: req.user.id, loggedAt: { gte: start, lte: end } },
+    }));
+    return res.json({
+      plan,
+      balance: {
+        dailyCaloriesTarget: target.dailyCalories,
+        proteinTargetGrams: target.proteinGrams,
+        consumedCalories: consumed.calories,
+        consumedProteinGrams: consumed.proteinGrams,
+        remainingCalories: Math.round((target.dailyCalories - consumed.calories - plan.estimatedCalories) * 10) / 10,
+        remainingProteinGrams: Math.round((target.proteinGrams - consumed.proteinGrams - plan.estimatedProteinGrams) * 10) / 10,
+      },
+      generationMethod: generated.generationMethod,
+      note: generated.generationMethod === 'ai_provider'
+        ? 'Generated with the configured AI provider and reconciled against the actual food database.'
+        : 'Generated from the authenticated user profile and actual food database. No external AI key is required.',
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function generateDietPlanWeekRequest(req, res, next) {
+  const parsed = generateDietPlanRequestSchema.safeParse(req.body);
+  if (!parsed.success) return invalid(res, parsed, 'Enter a valid weekly nutrition plan request');
+  const date = parsed.data.date || new Date().toISOString().slice(0, 10);
+  if (!isRealNutritionDate(date)) return res.status(400).json({ error: 'Date must be a real date in YYYY-MM-DD format' });
+  try {
+    const [foods, target] = await Promise.all([
+      getVisibleFoods(req.user.id, ''),
+      getOrCreateTarget(req.user),
+    ]);
+    const message = parsed.data.request || 'Create a practical seven-day nutrition plan';
+    const generated = await generateDietPlanWeekWithProvider({
+      message,
+      user: {
+        ...req.user,
+        fitnessGoal: parsed.data.goal || req.user.fitnessGoal,
+        dietaryPreference: parsed.data.dietaryPreference || req.user.dietaryPreference,
+      },
+      foods,
+      target,
+      date,
+    });
+    if (generated.plans.length !== 7) {
+      return res.status(422).json({ error: 'A complete seven-day plan could not be generated from the available food library.' });
+    }
+    return res.json({
+      plans: generated.plans,
+      generationMethod: generated.generationMethod,
+      note: generated.generationMethod === 'ai_provider'
+        ? 'Each day was generated with the configured provider and reconciled against the food database.'
+        : 'Seven daily plans were generated from your profile and actual food database. No external AI key is required.',
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function listDietPlans(req, res, next) {
+  try {
+    const plans = await prisma.dietPlan.findMany({
+      where: { ownerId: req.user.id },
+      include: { meals: true },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+    });
+    return res.json({ plans });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function getDietPlan(req, res, next) {
+  try {
+    const plan = await prisma.dietPlan.findFirst({
+      where: { id: req.params.id, ownerId: req.user.id },
+      include: { meals: true },
+    });
+    if (!plan) return res.status(404).json({ error: 'Diet plan not found' });
+    return res.json({ plan });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+function dietPlanFields(plan, replaceMeals = false) {
+  return {
+    name: plan.name,
+    goal: plan.goal,
+    dietaryPreference: plan.dietaryPreference,
+    estimatedCalories: plan.estimatedCalories,
+    estimatedProteinGrams: plan.estimatedProteinGrams,
+    estimatedCarbsGrams: plan.estimatedCarbsGrams,
+    estimatedFatGrams: plan.estimatedFatGrams,
+    meals: {
+      ...(replaceMeals ? { deleteMany: {} } : {}),
+      create: plan.meals.map((meal) => ({
+        mealType: meal.mealType,
+        name: meal.name,
+        ingredients: meal.ingredients,
+        nutrition: meal.nutrition,
+      })),
+    },
+  };
+}
+
+async function saveDietPlanRecord(transaction, ownerId, plan) {
+  const date = new Date(`${plan.date}T00:00:00.000Z`);
+  const existing = await transaction.dietPlan.findFirst({
+    where: { ownerId, date },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+  if (existing) {
+    return {
+      created: false,
+      plan: await transaction.dietPlan.update({
+        where: { id: existing.id },
+        data: dietPlanFields(plan, true),
+        include: { meals: true },
+      }),
+    };
+  }
+  return {
+    created: true,
+    plan: await transaction.dietPlan.create({
+      data: { ownerId, date, ...dietPlanFields(plan) },
+      include: { meals: true },
+    }),
+  };
+}
+
+export async function saveDietPlan(req, res, next) {
+  const parsed = dietPlanSchema.safeParse(req.body);
+  if (!parsed.success) return invalid(res, parsed, 'Enter a valid diet plan');
+  try {
+    const saved = await prisma.$transaction((transaction) => saveDietPlanRecord(transaction, req.user.id, parsed.data));
+    return res.status(saved.created ? 201 : 200).json({ plan: saved.plan });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+const dietPlanBatchSchema = z.object({
+  plans: z.array(dietPlanSchema).length(7),
+}).strict().refine(({ plans }) => new Set(plans.map((plan) => plan.date)).size === 7, {
+  message: 'A weekly plan must contain seven different dates',
+  path: ['plans'],
+});
+
+export async function saveDietPlanBatch(req, res, next) {
+  const parsed = dietPlanBatchSchema.safeParse(req.body);
+  if (!parsed.success) return invalid(res, parsed, 'Enter seven valid daily plans with distinct dates');
+  try {
+    const saved = await prisma.$transaction((transaction) => Promise.all(
+      parsed.data.plans.map((plan) => saveDietPlanRecord(transaction, req.user.id, plan)),
+    ));
+    return res.status(saved.some((result) => result.created) ? 201 : 200)
+      .json({ plans: saved.map((result) => result.plan) });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+export async function deleteDietPlan(req, res, next) {
+  try {
+    const plan = await prisma.dietPlan.findFirst({
+      where: { id: req.params.id, ownerId: req.user.id },
+      select: { id: true },
+    });
+    if (!plan) return res.status(404).json({ error: 'Diet plan not found' });
+    await prisma.dietPlan.delete({ where: { id: plan.id } });
     return res.status(204).end();
   } catch (error) {
     return next(error);

@@ -54,12 +54,14 @@ model User {
   updatedAt         DateTime           @updatedAt
   customExercises   Exercise[]         @relation("CustomExercises")
   workoutTemplates  WorkoutTemplate[]
+  workoutPlans      WorkoutPlan[]
   workoutSessions   WorkoutSession[]
   personalRecords   PersonalRecord[]
   weightEntries     WeightEntry[]
   foods             Food[]             @relation("CustomFoods")
   foodLogs          FoodLog[]
   nutritionTarget   NutritionTarget?
+  dietPlans         DietPlan[]
 
   @@index([createdAt])
 }
@@ -71,11 +73,13 @@ model Exercise {
   equipment     String
   description   String
   difficulty    String
+  exerciseType  String?
   instructions  String[]
   imageUrl      String?
   ownerId       String?
   owner         User?    @relation("CustomExercises", fields: [ownerId], references: [id], onDelete: Cascade)
   templateUses  WorkoutTemplateExercise[]
+  planUses      WorkoutPlanExercise[]
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -114,6 +118,66 @@ model WorkoutTemplateExercise {
   @@index([exerciseId])
 }
 
+model WorkoutPlan {
+  id              String           @id @default(cuid())
+  ownerId         String
+  owner           User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name            String
+  planType        String
+  goal            String
+  level           String
+  splitPreference String
+  daysPerWeek     Int
+  availableMinutes Int
+  equipment       String[]
+  startDate       DateTime         @db.Date
+  endDate         DateTime         @db.Date
+  isActive        Boolean          @default(true)
+  days            WorkoutPlanDay[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([ownerId, isActive, startDate, endDate])
+}
+
+model WorkoutPlanDay {
+  id                       String                @id @default(cuid())
+  planId                   String
+  plan                     WorkoutPlan           @relation(fields: [planId], references: [id], onDelete: Cascade)
+  date                     DateTime              @db.Date
+  dayOfWeek                Int
+  title                    String
+  focus                    String
+  isRestDay                Boolean               @default(false)
+  status                   String                @default("PLANNED")
+  estimatedDurationMinutes Int
+  warmup                   String
+  cooldown                 String
+  phase                    String
+  guidance                 String
+  exercises                WorkoutPlanExercise[]
+  sessions                 WorkoutSession[]
+
+  @@unique([planId, date])
+  @@index([date, status])
+}
+
+model WorkoutPlanExercise {
+  id          String         @id @default(cuid())
+  dayId       String
+  day         WorkoutPlanDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  exerciseId  String
+  exercise    Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
+  order       Int
+  sets        Int
+  reps        Int
+  restSeconds Int
+  notes       String?
+
+  @@unique([dayId, order])
+  @@unique([dayId, exerciseId])
+}
+
 model WorkoutSession {
   id              String                  @id @default(cuid())
   name            String
@@ -121,6 +185,8 @@ model WorkoutSession {
   owner           User                    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   templateId      String?
   template        WorkoutTemplate?        @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  planDayId       String?
+  planDay         WorkoutPlanDay?         @relation(fields: [planDayId], references: [id], onDelete: SetNull)
   startedAt       DateTime                @default(now())
   finishedAt      DateTime?
   durationSeconds Int?
@@ -139,6 +205,7 @@ model WorkoutExercise {
   equipment       String
   description     String
   difficulty      String
+  exerciseType    String?
   instructions    String[]
   imageUrl        String?
   order           Int
@@ -253,4 +320,36 @@ model NutritionTarget {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
+}
+
+model DietPlan {
+  id                    String         @id @default(cuid())
+  ownerId               String
+  owner                 User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name                  String
+  date                  DateTime       @db.Date
+  goal                  String
+  dietaryPreference     DietaryPreference
+  estimatedCalories     Float
+  estimatedProteinGrams Float
+  estimatedCarbsGrams   Float
+  estimatedFatGrams     Float
+  meals                 DietPlanMeal[]
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@index([ownerId, date])
+}
+
+model DietPlanMeal {
+  id           String   @id @default(cuid())
+  planId       String
+  plan         DietPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  mealType     MealType
+  name         String
+  ingredients  Json
+  nutrition    Json
+
+  @@unique([planId, mealType])
+  @@index([planId])
 }

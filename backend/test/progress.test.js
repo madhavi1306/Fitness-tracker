@@ -5,6 +5,7 @@ import {
   detectNewRecords,
   estimatedOneRepMax,
   filterWorkoutsByRange,
+  getRangeStart,
   getMuscleGroupVolumes,
   getWeekdayVolumes,
   setVolume,
@@ -84,6 +85,17 @@ test('date filters select the expected completed workouts', () => {
   ];
   assert.equal(filterWorkoutsByRange(workouts, 'allTime').length, 3);
   assert.equal(filterWorkoutsByRange(workouts, 'last30Days', new Date('2026-11-25T12:00:00.000Z')).length, 2);
+});
+
+test('timezone-aware progress ranges begin at the user local Monday', () => {
+  const now = new Date('2026-11-23T02:00:00.000Z');
+  const start = getRangeStart('thisWeek', now, 480);
+  assert.equal(start.toISOString(), '2026-11-16T08:00:00.000Z');
+  const workouts = [
+    { ...workout('2026-11-16', []), startedAt: new Date('2026-11-16T07:30:00.000Z') },
+    { ...workout('2026-11-16', []), startedAt: new Date('2026-11-16T08:30:00.000Z') },
+  ];
+  assert.equal(filterWorkoutsByRange(workouts, 'thisWeek', now, 480).length, 1);
 });
 
 test('current and best workout streaks use distinct consecutive workout dates', () => {

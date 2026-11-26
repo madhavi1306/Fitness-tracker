@@ -48,27 +48,41 @@ export function detectNewRecords({ set, previousSets, currentSets, previousExerc
   return candidates.filter((candidate) => candidate.value > (candidate.previousValue ?? 0));
 }
 
-export function getRangeStart(range, now = new Date()) {
-  const start = new Date(now);
-  start.setHours(0, 0, 0, 0);
+export function getRangeStart(range, now = new Date(), timezoneOffsetMinutes) {
+  if (timezoneOffsetMinutes === undefined) {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    if (range === 'thisWeek') {
+      const daysSinceMonday = (start.getDay() + 6) % 7;
+      start.setDate(start.getDate() - daysSinceMonday);
+      return start;
+    }
+    if (range === 'thisMonth') {
+      start.setDate(1);
+      return start;
+    }
+    if (range === 'last30Days') {
+      start.setDate(start.getDate() - 29);
+      return start;
+    }
+    return null;
+  }
+  const localNow = new Date(now.getTime() - timezoneOffsetMinutes * 60000);
+  const start = new Date(Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate()));
   if (range === 'thisWeek') {
-    const daysSinceMonday = (start.getDay() + 6) % 7;
-    start.setDate(start.getDate() - daysSinceMonday);
-    return start;
+    start.setUTCDate(start.getUTCDate() - (start.getUTCDay() + 6) % 7);
+  } else if (range === 'thisMonth') {
+    start.setUTCDate(1);
+  } else if (range === 'last30Days') {
+    start.setUTCDate(start.getUTCDate() - 29);
+  } else {
+    return null;
   }
-  if (range === 'thisMonth') {
-    start.setDate(1);
-    return start;
-  }
-  if (range === 'last30Days') {
-    start.setDate(start.getDate() - 29);
-    return start;
-  }
-  return null;
+  return new Date(start.getTime() + timezoneOffsetMinutes * 60000);
 }
 
-export function filterWorkoutsByRange(workouts, range, now = new Date()) {
-  const rangeStart = getRangeStart(range, now);
+export function filterWorkoutsByRange(workouts, range, now = new Date(), timezoneOffsetMinutes) {
+  const rangeStart = getRangeStart(range, now, timezoneOffsetMinutes);
   if (!rangeStart) return workouts;
   return workouts.filter((workout) => new Date(workout.startedAt) >= rangeStart);
 }

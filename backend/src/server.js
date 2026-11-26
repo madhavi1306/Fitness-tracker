@@ -3,8 +3,14 @@ import { app } from './app.js';
 import { prisma } from './utils/prisma.js';
 
 const port = Number(process.env.PORT) || 4000;
+const memoryMode = process.env.MEMORY_MODE === 'true' && process.env.PGLITE_MODE !== 'true';
 
-if ((!process.env.DATABASE_URL && process.env.MEMORY_MODE !== 'true')
+if (memoryMode && process.env.NODE_ENV !== 'test') {
+  console.error('Refusing to start with volatile in-memory storage. Use npm run dev or configure PostgreSQL and set MEMORY_MODE=false.');
+  process.exit(1);
+}
+
+if ((!process.env.DATABASE_URL && !(memoryMode && process.env.NODE_ENV === 'test'))
   || !process.env.JWT_SECRET
   || process.env.JWT_SECRET.length < 32) {
   console.error('Set DATABASE_URL or MEMORY_MODE=true, and set a JWT_SECRET of at least 32 characters.');

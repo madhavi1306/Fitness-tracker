@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { app } from '../src/app.js';
+
+process.env.MEMORY_MODE = 'true';
+process.env.PGLITE_MODE = 'false';
+const { app } = await import('../src/app.js');
 
 let server;
 let baseUrl;
@@ -13,7 +16,7 @@ test('API health and protected routes respond with expected status codes', async
 
   const health = await fetch(`${baseUrl}/api/health`);
   assert.equal(health.status, 200);
-  assert.deepEqual(await health.json(), { status: 'ok' });
+  assert.deepEqual(await health.json(), { status: 'ok', storage: 'memory' });
 
   const profile = await fetch(`${baseUrl}/api/profile`);
   assert.equal(profile.status, 401);
@@ -73,6 +76,7 @@ test('API health and protected routes respond with expected status codes', async
     ['/api/foods', 'GET'],
     ['/api/foods/search', 'GET'],
     ['/api/foods', 'POST'],
+    ['/api/ai/chat', 'POST'],
   ];
   for (const [path, method] of protectedRoutes) {
     const response = await fetch(`${baseUrl}${path}`, {

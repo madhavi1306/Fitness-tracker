@@ -1,40 +1,22 @@
 import bcrypt from 'bcrypt';
+import { seedExercises } from '../data/exercises.js';
 import { seedFoods } from '../data/foods.js';
 
 const now = () => new Date();
 const id = (prefix) => `${prefix}_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
 
-const builtInExercises = [
-  ['Barbell Bench Press', 'Chest', 'Barbell', 'A compound press for chest strength.', 'Intermediate', ['Set your eyes beneath the bar.', 'Grip slightly wider than shoulder width.', 'Lower to the mid-chest with control, then press up.']],
-  ['Dumbbell Chest Press', 'Chest', 'Dumbbells', 'A balanced horizontal press with a comfortable range of motion.', 'Beginner', ['Lie on a flat bench.', 'Lower the weights beside your chest.', 'Press upward with control.']],
-  ['Lat Pulldown', 'Back', 'Cable', 'A vertical pull that trains the lats and upper back.', 'Beginner', ['Sit tall and secure your thighs.', 'Pull the bar toward your upper chest.', 'Return overhead slowly.']],
-  ['One-Arm Dumbbell Row', 'Back', 'Dumbbells', 'A unilateral row for the lats and mid-back.', 'Beginner', ['Brace one hand on a bench.', 'Pull the dumbbell toward your hip.', 'Lower with control.']],
-  ['Barbell Back Squat', 'Legs', 'Barbell', 'A compound lower-body squat for the quads and glutes.', 'Advanced', ['Brace beneath the bar.', 'Sit down between your hips.', 'Drive through your feet to stand.']],
-  ['Dumbbell Romanian Deadlift', 'Legs', 'Dumbbells', 'A hip hinge emphasizing hamstrings and glutes.', 'Intermediate', ['Hold weights near your thighs.', 'Push hips back.', 'Stand by bringing hips forward.']],
-  ['Dumbbell Shoulder Press', 'Shoulders', 'Dumbbells', 'A vertical press for shoulders and triceps.', 'Beginner', ['Hold dumbbells at shoulder height.', 'Brace and press overhead.', 'Lower slowly.']],
-  ['Cable Lateral Raise', 'Shoulders', 'Cable', 'A controlled lateral raise for side delts.', 'Intermediate', ['Stand beside a low cable.', 'Raise your arm to shoulder height.', 'Lower without swinging.']],
-  ['Dumbbell Biceps Curl', 'Arms', 'Dumbbells', 'An isolation exercise for the biceps.', 'Beginner', ['Stand tall with arms by your sides.', 'Curl while keeping elbows close.', 'Lower fully.']],
-  ['Cable Triceps Pressdown', 'Arms', 'Cable', 'A cable isolation exercise for the triceps.', 'Beginner', ['Keep elbows tucked.', 'Press the handle down.', 'Return slowly.']],
-  ['Plank', 'Core', 'Bodyweight', 'An isometric trunk hold.', 'Beginner', ['Place forearms beneath shoulders.', 'Extend your legs.', 'Keep a straight line from head to heels.']],
-  ['Resistance Band Dead Bug', 'Core', 'Resistance Bands', 'A controlled core stability drill.', 'Intermediate', ['Anchor a light band overhead.', 'Brace and extend opposite limbs.', 'Alternate with control.']],
-];
-
 export const memoryState = {
   users: [],
-  exercises: builtInExercises.map(([name, muscleGroup, equipment, description, difficulty, instructions]) => ({
+  exercises: seedExercises.map((exercise) => ({
     id: id('exercise'),
-    name,
-    muscleGroup,
-    equipment,
-    description,
-    difficulty,
-    instructions,
+    ...exercise,
     imageUrl: null,
     ownerId: null,
     createdAt: now(),
     updatedAt: now(),
   })),
   templates: [],
+  workoutPlans: [],
   sessions: [],
   personalRecords: [],
   weightEntries: [],
@@ -47,6 +29,7 @@ export const memoryState = {
   })),
   foodLogs: [],
   nutritionTargets: [],
+  dietPlans: [],
 };
 
 function matchesWhere(item, where = {}) {
@@ -62,6 +45,16 @@ function matchesWhere(item, where = {}) {
   if (where.muscleGroup && item.muscleGroup !== where.muscleGroup) return false;
   if (where.equipment && item.equipment !== where.equipment) return false;
   if (where.email && item.email !== where.email) return false;
+  if (where.date && new Date(item.date).getTime() !== new Date(where.date).getTime()) return false;
+  for (const field of ['date', 'startDate', 'endDate']) {
+    const filter = where[field];
+    if (!filter || typeof filter !== 'object') continue;
+    const value = new Date(item[field]).getTime();
+    if (filter.gte && value < new Date(filter.gte).getTime()) return false;
+    if (filter.lte && value > new Date(filter.lte).getTime()) return false;
+  }
+  if (where.isActive !== undefined && item.isActive !== where.isActive) return false;
+  if (where.planId && item.planId !== where.planId) return false;
   if (where.templateId && item.templateId !== where.templateId) return false;
   if (where.sessionId && item.sessionId !== where.sessionId) return false;
   if (where.exerciseId && item.exerciseId !== where.exerciseId) return false;
@@ -131,6 +124,33 @@ function sessionWithExercises(session) {
       ...exercise,
       sets: [...(exercise.sets || [])].sort((a, b) => a.setNumber - b.setNumber),
     })),
+  };
+}
+
+function planDayWithExercises(day, include = {}) {
+  const result = { ...day };
+  if (include.plan) {
+    const plan = memoryState.workoutPlans.find((item) => item.id === day.planId);
+    result.plan = plan ? { ...plan, ownerId: plan.ownerId } : null;
+  }
+  if (include.exercises) {
+    result.exercises = [...(day.exercises || [])]
+      .sort((left, right) => left.order - right.order)
+      .map((item) => ({
+        ...item,
+        exercise: memoryState.exercises.find((exercise) => exercise.id === item.exerciseId),
+      }));
+  }
+  return result;
+}
+
+function workoutPlanWithDays(plan, include) {
+  if (!include?.days) return { ...plan };
+  return {
+    ...plan,
+    days: [...(plan.days || [])]
+      .sort((left, right) => new Date(left.date) - new Date(right.date))
+      .map((day) => planDayWithExercises(day, include.days.include || {})),
   };
 }
 
@@ -238,6 +258,80 @@ export const memoryPrisma = {
       return { count: before };
     },
   },
+  workoutPlan: {
+    findMany: async ({ where, include, orderBy, take } = {}) => {
+      let plans = memoryState.workoutPlans.filter((item) => matchesWhere(item, where));
+      plans = applySort(plans, orderBy);
+      if (take) plans = plans.slice(0, take);
+      return plans.map((plan) => workoutPlanWithDays(plan, include));
+    },
+    findFirst: async ({ where, include, orderBy } = {}) => {
+      const plans = applySort(memoryState.workoutPlans.filter((item) => matchesWhere(item, where)), orderBy);
+      return plans.length ? workoutPlanWithDays(plans[0], include) : null;
+    },
+    create: async ({ data, include }) => {
+      const plan = {
+        id: id('workout_plan'),
+        ...data,
+        createdAt: now(),
+        updatedAt: now(),
+        days: (data.days?.create || []).map((dayData) => ({
+          id: id('workout_plan_day'),
+          ...dayData,
+          planId: undefined,
+          exercises: (dayData.exercises?.create || []).map((item) => ({
+            id: id('workout_plan_exercise'),
+            ...item,
+            dayId: undefined,
+          })),
+        })),
+      };
+      plan.days.forEach((day) => { day.planId = plan.id; });
+      memoryState.workoutPlans.push(plan);
+      return workoutPlanWithDays(plan, include);
+    },
+    updateMany: async ({ where, data }) => {
+      const plans = memoryState.workoutPlans.filter((item) => matchesWhere(item, where));
+      plans.forEach((plan) => Object.assign(plan, data, { updatedAt: now() }));
+      return { count: plans.length };
+    },
+    deleteMany: async ({ where }) => {
+      const before = memoryState.workoutPlans.length;
+      memoryState.workoutPlans = memoryState.workoutPlans.filter((item) => !matchesWhere(item, where));
+      return { count: before - memoryState.workoutPlans.length };
+    },
+  },
+  workoutPlanDay: {
+    findFirst: async ({ where, include, select } = {}) => {
+      const day = memoryState.workoutPlans
+        .flatMap((plan) => plan.days)
+        .find((item) => matchesWhere(item, where));
+      if (!day) return null;
+      if (select) return selectObject(day, select);
+      return planDayWithExercises(day, include);
+    },
+    update: async ({ where, data }) => {
+      const day = memoryState.workoutPlans.flatMap((plan) => plan.days).find((item) => item.id === where.id);
+      if (!day) throw new Error('Scheduled workout day not found');
+      Object.assign(day, data);
+      return planDayWithExercises(day);
+    },
+  },
+  workoutPlanExercise: {
+    deleteMany: async ({ where }) => {
+      const day = memoryState.workoutPlans.flatMap((plan) => plan.days).find((item) => item.id === where.dayId);
+      const before = day?.exercises.length || 0;
+      if (day) day.exercises = [];
+      return { count: before };
+    },
+    createMany: async ({ data }) => {
+      for (const item of data) {
+        const day = memoryState.workoutPlans.flatMap((plan) => plan.days).find((entry) => entry.id === item.dayId);
+        if (day) day.exercises.push({ id: id('workout_plan_exercise'), ...item });
+      }
+      return { count: data.length };
+    },
+  },
   workoutSession: {
     create: async ({ data }) => {
       const session = {
@@ -245,6 +339,7 @@ export const memoryPrisma = {
         name: data.name,
         ownerId: data.ownerId,
         templateId: data.templateId,
+        planDayId: data.planDayId || null,
         startedAt: now(),
         finishedAt: null,
         durationSeconds: null,
@@ -253,8 +348,20 @@ export const memoryPrisma = {
       memoryState.sessions.push(session);
       return sessionWithExercises(session);
     },
-    findFirst: async ({ where, include }) => {
-      const session = memoryState.sessions.find((item) => item.id === where.id && item.ownerId === where.ownerId);
+    findFirst: async ({ where, include, orderBy } = {}) => {
+      const sessions = memoryState.sessions
+        .filter((item) => {
+          if (where.id && item.id !== where.id) return false;
+          if (item.ownerId !== where.ownerId) return false;
+          if (Object.prototype.hasOwnProperty.call(where, 'finishedAt') && where.finishedAt === null
+            && item.finishedAt != null) return false;
+          if (where.finishedAt?.not === null && item.finishedAt == null) return false;
+          return true;
+        })
+        .sort((left, right) => orderBy?.startedAt === 'desc'
+          ? right.startedAt - left.startedAt
+          : left.startedAt - right.startedAt);
+      const session = sessions[0];
       return session ? sessionWithExercises(session) : null;
     },
     findMany: async ({ where }) => memoryState.sessions
@@ -410,9 +517,83 @@ export const memoryPrisma = {
       return target;
     },
   },
+  dietPlan: {
+    findMany: async ({ where, include, orderBy } = {}) => {
+      let plans = memoryState.dietPlans.filter((plan) => matchesWhere(plan, where));
+      if (orderBy) {
+        const primary = Array.isArray(orderBy) ? orderBy[0] : orderBy;
+        const [field, direction] = Object.entries(primary)[0] || [];
+        if (field) plans = [...plans].sort((a, b) => {
+          const left = new Date(a[field] || 0).getTime();
+          const right = new Date(b[field] || 0).getTime();
+          return direction === 'desc' ? right - left : left - right;
+        });
+      }
+      return plans.map((plan) => include?.meals ? {
+        ...plan,
+        meals: (plan.meals || []).map((meal) => ({ ...meal })),
+      } : { ...plan });
+    },
+    findFirst: async ({ where, include } = {}) => {
+      const plan = memoryState.dietPlans.find((item) => matchesWhere(item, where)) || null;
+      return plan && include?.meals ? { ...plan, meals: (plan.meals || []).map((meal) => ({ ...meal })) } : plan ? { ...plan } : null;
+    },
+    create: async ({ data, include }) => {
+      const plan = {
+        id: id('diet_plan'),
+        ownerId: data.ownerId,
+        name: data.name,
+        date: data.date,
+        goal: data.goal,
+        dietaryPreference: data.dietaryPreference,
+        estimatedCalories: data.estimatedCalories,
+        estimatedProteinGrams: data.estimatedProteinGrams,
+        estimatedCarbsGrams: data.estimatedCarbsGrams,
+        estimatedFatGrams: data.estimatedFatGrams,
+        createdAt: now(),
+        updatedAt: now(),
+        meals: (data.meals?.create || []).map((meal) => ({
+          id: id('diet_meal'),
+          planId: '',
+          mealType: meal.mealType,
+          name: meal.name,
+          ingredients: meal.ingredients,
+          nutrition: meal.nutrition,
+        })),
+      };
+      plan.meals.forEach((meal) => { meal.planId = plan.id; });
+      memoryState.dietPlans.push(plan);
+      return include?.meals ? { ...plan, meals: plan.meals.map((meal) => ({ ...meal })) } : { ...plan };
+    },
+    update: async ({ where, data, include }) => {
+      const plan = memoryState.dietPlans.find((item) => item.id === where.id);
+      if (!plan) throw new Error('Diet plan not found');
+      const { meals, ...fields } = data;
+      Object.assign(plan, fields, { updatedAt: now() });
+      if (meals?.deleteMany !== undefined) plan.meals = [];
+      if (meals?.create) {
+        plan.meals.push(...meals.create.map((meal) => ({
+          id: id('diet_meal'),
+          planId: plan.id,
+          ...meal,
+        })));
+      }
+      return include?.meals ? { ...plan, meals: plan.meals.map((meal) => ({ ...meal })) } : { ...plan };
+    },
+    delete: async ({ where }) => {
+      const index = memoryState.dietPlans.findIndex((plan) => plan.id === where.id);
+      if (index < 0) throw new Error('Diet plan not found');
+      const [plan] = memoryState.dietPlans.splice(index, 1);
+      return plan;
+    },
+  },
   $transaction: async (callback) => callback({
     workoutTemplateExercise: memoryPrisma.workoutTemplateExercise,
     workoutTemplate: memoryPrisma.workoutTemplate,
+    workoutPlan: memoryPrisma.workoutPlan,
+    workoutPlanDay: memoryPrisma.workoutPlanDay,
+    workoutPlanExercise: memoryPrisma.workoutPlanExercise,
+    dietPlan: memoryPrisma.dietPlan,
   }),
   $disconnect: async () => {},
 };

@@ -18,6 +18,7 @@ const exerciseInclude = {
       equipment: true,
       description: true,
       difficulty: true,
+      exerciseType: true,
       instructions: true,
       imageUrl: true,
     },
@@ -157,6 +158,47 @@ export async function startWorkout(req, res, next) {
   const parsed = startWorkoutSchema.safeParse(req.body);
   if (!parsed.success) return invalid(res, parsed);
   try {
+    if (parsed.data.planDayId) {
+      const day = await prisma.workoutPlanDay.findFirst({
+        where: { id: parsed.data.planDayId },
+        include: {
+          plan: { select: { ownerId: true } },
+          exercises: {
+            orderBy: { order: 'asc' },
+            include: { exercise: true },
+          },
+        },
+      });
+      if (!day || day.plan.ownerId !== req.user.id) return res.status(404).json({ error: 'Scheduled workout not found' });
+      if (day.isRestDay || !day.exercises.length) return res.status(400).json({ error: 'Rest days cannot be started as workouts' });
+      const session = await prisma.workoutSession.create({
+        data: {
+          name: day.title,
+          ownerId: req.user.id,
+          planDayId: day.id,
+          exercises: {
+            create: day.exercises.map((item) => ({
+              name: item.exercise.name,
+              muscleGroup: item.exercise.muscleGroup,
+              equipment: item.exercise.equipment,
+              description: item.exercise.description,
+              difficulty: item.exercise.difficulty,
+              exerciseType: item.exercise.exerciseType,
+              instructions: item.exercise.instructions,
+              imageUrl: item.exercise.imageUrl,
+              order: item.order,
+              targetSets: item.sets,
+              targetReps: item.reps,
+              targetWeightKg: null,
+              restSeconds: item.restSeconds,
+              notes: item.notes,
+            })),
+          },
+        },
+        include: sessionInclude,
+      });
+      return res.status(201).json({ workout: session });
+    }
     const template = await prisma.workoutTemplate.findFirst({
       where: { id: parsed.data.templateId, ownerId: req.user.id },
       include: templateInclude,
@@ -174,6 +216,7 @@ export async function startWorkout(req, res, next) {
             equipment: item.exercise.equipment,
             description: item.exercise.description,
             difficulty: item.exercise.difficulty,
+            exerciseType: item.exercise.exerciseType,
             instructions: item.exercise.instructions,
             imageUrl: item.exercise.imageUrl,
             order: item.order,
@@ -287,6 +330,12 @@ export async function finishWorkout(req, res, next) {
       data: { finishedAt: new Date(), durationSeconds },
       include: sessionInclude,
     });
+    if (session.planDayId) {
+      await prisma.workoutPlanDay.update({
+        where: { id: session.planDayId },
+        data: { status: 'COMPLETED' },
+      });
+    }
     return res.json({ workout });
   } catch (error) {
     return next(error);
